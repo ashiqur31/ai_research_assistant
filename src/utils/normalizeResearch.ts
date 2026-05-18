@@ -1,15 +1,46 @@
-export function normalizeResearchData(data: any) {
-  const normalizeArray = (arr: any[]) => {
-    return arr.map(item => ({
-      text: Array.isArray(item.text) ? item?.text.join(" ") : String(item.text || ""),
-      source: String(item?.source || ""),
-      title: String(item?.title || "")
-    }))
+import { ResearchData } from "../types/research";
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeText(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean).join(" ");
   }
 
-  return {
-    claims: normalizeArray(data.claims || []),
-    quotes: normalizeArray(data.quotes || []),
-    statistics: normalizeArray(data.statistics || [])
+  return String(value ?? "").trim();
+}
+
+function normalizeEvidenceArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
   }
+
+  return value
+    .map((item) => {
+      const record = isRecord(item) ? item : {};
+
+      return {
+        text: normalizeText(record.text),
+        source: normalizeText(record.source),
+        title: normalizeText(record.title),
+      };
+    })
+    .filter((item) => item.text && item.source);
+}
+
+export function normalizeResearchData(data: unknown): ResearchData {
+  const record = isRecord(data) ? data : {};
+
+  const duplicatesRemoved = Number(record.duplicatesRemoved ?? 0);
+
+  return {
+    claims: normalizeEvidenceArray(record.claims),
+    quotes: normalizeEvidenceArray(record.quotes),
+    statistics: normalizeEvidenceArray(record.statistics),
+    duplicatesRemoved: Number.isFinite(duplicatesRemoved) ? duplicatesRemoved : 0,
+  };
 }

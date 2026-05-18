@@ -1,7 +1,25 @@
-import IORedis from "ioredis"
+import IORedis, { RedisOptions } from "ioredis";
+import { env } from "./env";
 
-export const connection = new IORedis({
-  host: "127.0.0.1",
-  port: 6379,
-  maxRetriesPerRequest: null
-})
+const baseRedisOptions: RedisOptions = {
+  maxRetriesPerRequest: null,
+};
+
+export function createRedisConnection(options: RedisOptions = {}) {
+  const redisOptions = {
+    ...baseRedisOptions,
+    ...options,
+  };
+
+  if (env.redisUrl) {
+    return new IORedis(env.redisUrl, redisOptions);
+  }
+
+  return new IORedis({
+    host: env.redisHost,
+    port: env.redisPort,
+    ...redisOptions,
+  });
+}
+
+export const connection = createRedisConnection();

@@ -1,20 +1,22 @@
-type Evidience = {
+type Evidence = {
   text: string;
   source: string;
   title: string;
 };
 
-export function deDuplicateEvidience(items: Evidience[]): Evidience[] {
+export function deDuplicateEvidence(items: Evidence[]): Evidence[] {
   const seen = new Set<string>();
+
   return items.filter((item) => {
-    const normalized = item.text
-      .toLocaleLowerCase()
-      .trim()
-      .replace(/\s+/g, " ");
+    const normalized = item.text.toLowerCase().trim().replace(/\s+/g, " ");
+
     if (seen.has(normalized)) {
       return false;
     }
+
     seen.add(normalized);
     return true;
   });
 }
+
+export const deDuplicateEvidience = deDuplicateEvidence;

@@ -2,43 +2,36 @@ import { openai } from "../services/openai";
 import { logger } from "../utils/logger";
 import { cleanJsonResponse } from "../utils/jsonCleaner";
 import { safeParseResearch } from "../utils/safeParse";
+import { metrics } from "../utils/metrics";
+import { estimateCost } from "../utils/costTracker";
+import { ResearchData } from "../types/research";
+import { getErrorMessage } from "../utils/errors";
 
-export async function extractResearchData(content: string, sourceurl: string, sourceTitle: string) {
+export async function extractResearchData(
+  content: string,
+  sourceUrl: string,
+  sourceTitle: string,
+): Promise<ResearchData> {
   try {
-    logger.info("Starting Extraction");
+    logger.info({ sourceUrl }, "Starting extraction");
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `Extract structured research information. 
-                    IMPORTANT:
-                    - Return only valid JSON
-                    - Include the exact source url provided
-                    - Do not wrap in markdown
-                    - Use exact field names:
-                      - claims
-                      - quotes
-                      - statistics
-                    - Use this exact source URL: ${sourceurl}
-                    - Use this exact source title: ${sourceTitle}
+          content: `Extract structured research information.
+Return only valid JSON and do not wrap the response in markdown.
+Use the exact field names: claims, quotes, statistics.
+Use this exact source URL: ${sourceUrl}
+Use this exact source title: ${sourceTitle}
 
-                    Use this Schema:
-                          {
-                            "claims": [{
-                                        "text": string[],
-                                        "source": string,
-                                        "title": string
-                                      }],
-                            "quotes": [{
-                                        "text": string[],
-                                        "source": string
-                                      }],
-                            "statistics": [{
-                                        "text": string[],
-                                        "source": string
-                                      }],
-                          }`,
+Schema:
+{
+  "claims": [{ "text": string[], "source": string, "title": string }],
+  "quotes": [{ "text": string[], "source": string, "title": string }],
+  "statistics": [{ "text": string[], "source": string, "title": string }]
+}`,
         },
         {
           role: "user",
@@ -47,18 +40,29 @@ export async function extractResearchData(content: string, sourceurl: string, so
       ],
       temperature: 0,
     });
-    // console.log("------------------------",response)
+
+    const usage = response.usage;
+    const cost = estimateCost(
+      "gpt-4o-mini",
+      usage?.prompt_tokens || 0,
+      usage?.completion_tokens || 0,
+    );
+
+    metrics.totalCost += cost;
+    metrics.totalTokens += usage?.total_tokens || 0;
+    metrics.extractionCalls += 1;
+
     const raw = response.choices[0].message.content || "{}";
-    // console.log("\nRaw model output\n");
-    // console.log(raw);
     const cleaned = cleanJsonResponse(raw);
+
     return safeParseResearch(cleaned);
-  } catch (error: any) {
-    logger.error({ error: error.message }, "Extraction failed");
+  } catch (error) {
+    logger.error({ error: getErrorMessage(error), sourceUrl }, "Extraction failed");
     return {
       claims: [],
       quotes: [],
       statistics: [],
+      duplicatesRemoved: 0,
     };
   }
 }
